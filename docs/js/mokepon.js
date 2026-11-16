@@ -18,7 +18,7 @@ const sectionVerMapa = document.getElementById("ver-mapa")
 const mapa = document.getElementById("mapa")
 
 // URL del servidor backend. Cámbiala por la URL de Render una vez desplegado.
-const BACKEND_URL = "https://mokepon-server.onrender.com"
+const BACKEND_URL = "https://mokepon-online-github-io.onrender.com"
 
 let jugadorId = null
 let enemigoId = null
