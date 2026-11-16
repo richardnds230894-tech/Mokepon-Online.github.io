@@ -48,7 +48,9 @@ let contadorCombates = 0
 let indexAtaqueJugador
 let indexAtaqueEnemigo
 let lienzo = mapa.getContext("2d")
-let intervalo
+let intervaloMapa      // intervalo del canvas (pintarCanvas)
+let intervaloAtaques   // intervalo del polling de ataques (obtenerAtaques)
+let combateEnCurso = false  // evita que revisarColision dispare el combate múltiples veces
 let mapaBackground = new Image()
 mapaBackground.src = "./assets/mokemap2.jpeg"
 
@@ -155,14 +157,21 @@ unirseAlJuego()
 function unirseAlJuego() {
     fetch(`${BACKEND_URL}/unirse`)
         .then(function (res) {
-
             if (res.ok) {
                 res.text()
                     .then(function (respuesta) {
                         console.log(respuesta)
                         jugadorId = respuesta
                     })
+            } else {
+                // Reintenta si el servidor responde con error
+                setTimeout(unirseAlJuego, 2000)
             }
+        })
+        .catch(function () {
+            // El servidor estaba durmiendo (Render free tier) — reintenta cada 2 s
+            console.warn("Servidor no disponible, reintentando en 2s...")
+            setTimeout(unirseAlJuego, 2000)
         })
 }
 
@@ -259,7 +268,8 @@ function enviarAtaque() {
         })
     })
 
-    intervalo = setInterval(obtenerAtaques, 50)
+    clearInterval(intervaloAtaques)  // limpia cualquier polling anterior antes de crear uno nuevo
+    intervaloAtaques = setInterval(obtenerAtaques, 50)
 }
 
 function obtenerAtaques() {
@@ -269,6 +279,7 @@ function obtenerAtaques() {
                 res.json()
                     .then(function ({ ataques }) {
                         if (ataques.length === 5) {
+                            clearInterval(intervaloAtaques)  // detiene el polling antes de combatir
                             ataqueEnemigo = ataques
                             combateMokepon()
                         }
@@ -303,7 +314,7 @@ function indexAmbosOponentes(jugador, enemigo) {
 }
 
 function combateMokepon() {
-    clearInterval(intervalo)
+    clearInterval(intervaloAtaques)  // seguridad: asegura que el polling esté detenido
     for (let i = 0; i < ataqueJugador.length; i++) {
         if (ataqueJugador[i] === ataqueEnemigo[i]) {
             indexAmbosOponentes(i, i)
@@ -498,7 +509,9 @@ function sePresionaUnaTecla(event) {
 
 function iniciarMapa() {
     mascotaJugadorObjeto = obtenerObjetoMascota(mascotaJugador)
-    intervalo = setInterval(pintarCanvas, 50)
+    combateEnCurso = false
+    clearInterval(intervaloMapa)
+    intervaloMapa = setInterval(pintarCanvas, 50)
     window.addEventListener("keydown", sePresionaUnaTecla)
     window.addEventListener("keyup", detenerMovimiento)
 }
@@ -532,7 +545,10 @@ function revisarColision(enemigo) {
     }
 
     detenerMovimiento()
-    clearInterval(intervalo)
+    clearInterval(intervaloMapa)
+
+    if (combateEnCurso) return  // evita disparar el combate dos veces con la misma colisión
+    combateEnCurso = true
 
     enemigoId = enemigo.id
     sectionSeleccionarAtaque.style.display = "flex"
