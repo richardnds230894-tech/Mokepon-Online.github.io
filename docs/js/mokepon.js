@@ -17,6 +17,9 @@ const contenedorAtaques = document.getElementById("contenedor-ataques")
 const sectionVerMapa = document.getElementById("ver-mapa")
 const mapa = document.getElementById("mapa")
 
+// URL del servidor backend. Cámbiala por la URL de Render una vez desplegado.
+const BACKEND_URL = "https://mokepon-server.onrender.com"
+
 let jugadorId = null
 let enemigoId = null
 let mokepones = []
@@ -150,7 +153,7 @@ botonReiniciar.addEventListener("click", reiniciar)
 unirseAlJuego()
 
 function unirseAlJuego() {
-    fetch("http://192.168.100.16:8080/unirse")
+    fetch(`${BACKEND_URL}/unirse`)
         .then(function (res) {
 
             if (res.ok) {
@@ -187,7 +190,7 @@ function seleccionarMascotaJugador() {
 }
 
 function seleccionarMokepon(mascotaJugador) {
-    fetch(`http://192.168.100.16:8080/mokepon/${jugadorId}`, {
+    fetch(`${BACKEND_URL}/mokepon/${jugadorId}`, {
         method: "post",
         headers: {
             "Content-Type": "application/json"
@@ -246,7 +249,7 @@ function secuenciaDeAtaques() {
 }
 
 function enviarAtaque() {
-    fetch(`http://192.168.100.16:8080/mokepon/${jugadorId}/ataques`, {
+    fetch(`${BACKEND_URL}/mokepon/${jugadorId}/ataques`, {
         method: "post",
         headers: {
             "Content-Type": "application/json"
@@ -260,7 +263,7 @@ function enviarAtaque() {
 }
 
 function obtenerAtaques() {
-    fetch(`http://192.168.100.16:8080/mokepon/${enemigoId}/ataques`)
+    fetch(`${BACKEND_URL}/mokepon/${enemigoId}/ataques`)
         .then(function (res) {
             if (res.ok) {
                 res.json()
@@ -389,7 +392,7 @@ function pintarCanvas() {
 }
 
 function enviarPosicion(x, y) {
-    fetch(`http://192.168.100.16:8080/mokepon/${jugadorId}/posicion`, {
+    fetch(`${BACKEND_URL}/mokepon/${jugadorId}/posicion`, {
         method: "post",
         headers: {
             "Content-Type": "application/json"
