@@ -9,11 +9,14 @@ app.use(express.json())
 const jugadores = []
 const TIMEOUT_INACTIVIDAD_MS = 10000  // eliminar jugador tras 10s sin enviar posición
 
-// Limpia jugadores inactivos cada 5 segundos
+// Limpia jugadores inactivos cada 5 segundos.
+// Solo aplica a jugadores que ya entraron al mapa (ultimaActividad != null).
+// Jugadores en pantalla de selección tienen ultimaActividad = null y no se tocan.
 setInterval(() => {
     const ahora = Date.now()
     for (let i = jugadores.length - 1; i >= 0; i--) {
-        if (ahora - jugadores[i].ultimaActividad > TIMEOUT_INACTIVIDAD_MS) {
+        const j = jugadores[i]
+        if (j.ultimaActividad !== null && ahora - j.ultimaActividad > TIMEOUT_INACTIVIDAD_MS) {
             jugadores.splice(i, 1)
         }
     }
@@ -22,11 +25,12 @@ setInterval(() => {
 class Jugador {
     constructor(id) {
         this.id = id
-        this.ultimaActividad = Date.now()
+        this.ultimaActividad = null  // null = aún en pantalla de selección, no cuenta timeout
     }
 
     asignarMokepon(mokepon) {
         this.mokepon = mokepon
+        // El timeout empieza a contar desde que elige Mokepon y entra al mapa
         this.ultimaActividad = Date.now()
     }
 
