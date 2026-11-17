@@ -7,23 +7,38 @@ app.use(cors())
 app.use(express.json())
 
 const jugadores = []
+const TIMEOUT_INACTIVIDAD_MS = 10000  // eliminar jugador tras 10s sin enviar posición
+
+// Limpia jugadores inactivos cada 5 segundos
+setInterval(() => {
+    const ahora = Date.now()
+    for (let i = jugadores.length - 1; i >= 0; i--) {
+        if (ahora - jugadores[i].ultimaActividad > TIMEOUT_INACTIVIDAD_MS) {
+            jugadores.splice(i, 1)
+        }
+    }
+}, 5000)
 
 class Jugador {
     constructor(id) {
         this.id = id
+        this.ultimaActividad = Date.now()
     }
 
     asignarMokepon(mokepon) {
         this.mokepon = mokepon
+        this.ultimaActividad = Date.now()
     }
 
     actualizarPosicion(x, y) {
         this.x = x
         this.y = y
+        this.ultimaActividad = Date.now()
     }
 
     asignarAtaques(ataques) {
         this.ataques = ataques
+        this.ultimaActividad = Date.now()
     }
 }
 
