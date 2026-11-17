@@ -278,14 +278,17 @@ function enviarAtaque() {
     intervaloAtaques = setInterval(obtenerAtaques, 50)
 }
 
+let combateYaIniciado = false  // guarda contra múltiples resoluciones async en vuelo
+
 function obtenerAtaques() {
     fetch(`${BACKEND_URL}/mokepon/${enemigoId}/ataques`)
         .then(function (res) {
             if (res.ok) {
                 res.json()
                     .then(function ({ ataques }) {
-                        if (ataques.length === 5) {
-                            clearInterval(intervaloAtaques)  // detiene el polling antes de combatir
+                        if (ataques.length === 5 && !combateYaIniciado) {
+                            combateYaIniciado = true
+                            clearInterval(intervaloAtaques)
                             ataqueEnemigo = ataques
                             combateMokepon()
                         }
@@ -521,6 +524,7 @@ function sePresionaUnaTecla(event) {
 function iniciarMapa() {
     mascotaJugadorObjeto = obtenerObjetoMascota(mascotaJugador)
     combateEnCurso = false
+    combateYaIniciado = false
     clearInterval(intervaloMapa)
     intervaloMapa = setInterval(pintarCanvas, 50)
     window.addEventListener("keydown", sePresionaUnaTecla)
@@ -560,6 +564,11 @@ function revisarColision(enemigo) {
 
     if (combateEnCurso) return  // evita disparar el combate dos veces con la misma colisión
     combateEnCurso = true
+
+    // Limpiar ataques del combate anterior
+    ataqueJugador = []
+    ataqueEnemigo = []
+    combateYaIniciado = false
 
     enemigoId = enemigo.id
     sectionSeleccionarAtaque.style.display = "flex"
