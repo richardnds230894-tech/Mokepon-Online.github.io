@@ -17,7 +17,9 @@ const contenedorAtaques = document.getElementById("contenedor-ataques")
 const sectionVerMapa = document.getElementById("ver-mapa")
 const mapa = document.getElementById("mapa")
 
-// URL del servidor backend. Cámbiala por la URL de Render una vez desplegado.
+// URL del servidor backend.
+// Para pruebas locales usa "http://localhost:8080".
+// Para producción en Render usa "https://mokepon-online-github-io.onrender.com".
 const BACKEND_URL = "https://mokepon-online-github-io.onrender.com"
 
 let jugadorId = null
@@ -51,6 +53,8 @@ let lienzo = mapa.getContext("2d")
 let intervaloMapa      // intervalo del canvas (pintarCanvas)
 let intervaloAtaques   // intervalo del polling de ataques (obtenerAtaques)
 let combateEnCurso = false  // evita que revisarColision dispare el combate múltiples veces
+let ultimoEnemigoDerrotadoId = null  // evita recolisar con el enemigo recién derrotado
+let proximoCombatePermitidoEn = 0    // enfriamiento (ms) tras terminar un combate
 let mapaBackground = new Image()
 mapaBackground.src = "./assets/mokemap2.jpeg"
 
@@ -155,6 +159,8 @@ sectionVerMapa.style.display = "none"
 
 
 botonReiniciar.addEventListener("click", reiniciar)
+const botonSiguienteRonda = document.getElementById("boton-siguiente-ronda")
+botonSiguienteRonda.addEventListener("click", irASiguienteRonda)
 unirseAlJuego()
 
 function unirseAlJuego() {
@@ -201,6 +207,7 @@ function seleccionarMascotaJugador() {
     seleccionarMokepon(mascotaJugador)
     iniciarMapa()
     extraerAtaques(mascotaJugador)
+    secuenciaDeAtaques()  // registra los listeners de los botones de ataque una sola vez
 
 }
 
@@ -300,7 +307,7 @@ function obtenerAtaques() {
 function seleccionarMascotaEnemigo(enemigo) {
     spanMascotaEnemigo.innerHTML = enemigo.nombre
     ataquesMokeponEnemigo = enemigo.ataques
-    secuenciaDeAtaques()
+    reiniciarBotonesAtaque()
 }
 
 function ataqueMascotaEnemigo() {
@@ -355,14 +362,16 @@ function combateMokepon() {
 }
 
 function conteoVidas() {
-    if (contadorCombates == "1") {
-        if (vidasJugador < vidasEnemigos) {
-            crearMensajeFinal("🏆Felicidades, El Ganador es el JUGADOR-2 🏆")
-        } else if (vidasEnemigos < vidasJugador) {
-            crearMensajeFinal("🏆Felicidades, El Ganador es el JUGADOR-1 🏆")
-        } else if (vidasJugador === vidasEnemigos) {
-            crearMensajeFinal("⚔️ Esto ha sido un Empate ⚔️")
-        }
+    // Cada combate se resuelve una vez: revisarColision reinicia contadorCombates
+    // a 0 y combateMokepon lo lleva a 1 al terminar.
+    if (contadorCombates !== 1) return
+
+    if (vidasJugador === vidasEnemigos) {
+        empatarCombate()
+    } else if (vidasJugador > vidasEnemigos) {
+        ganarCombate()
+    } else {
+        perderCombate()
     }
 }
 
@@ -378,22 +387,128 @@ function crearMensajes() {
     ataquesDelEnemigo.appendChild(nuevoAtaqueEnemigo)
 }
 
-function crearMensajeFinal(resultadoFinal) {
-    sectionMensajes.innerHTML = (resultadoFinal)
+// El jugador GANÓ el combate: muestra los resultados y el botón "Ir a Siguiente Ronda".
+// Mientras espera en esta pantalla, un heartbeat mantiene vivo su registro en el servidor.
+function ganarCombate() {
+    sectionMensajes.innerHTML = "🏆 ¡Felicidades! Has Ganado. Pasaste a la Siguiente Ronda 🏆"
     sectionReiniciar.style.display = "block"
-    // Eliminar ambos jugadores del servidor al terminar el combate
-    eliminarJugador(jugadorId)
-    eliminarJugador(enemigoId)
+    botonSiguienteRonda.style.display = "inline-block"
+    botonReiniciar.style.display = "none"
+    iniciarHeartbeat()
+}
+
+// Empate: nadie se elimina; el jugador sigue jugando.
+async function empatarCombate() {
+    sectionMensajes.innerHTML = "⚔️ Empate. Nadie fue eliminado. Sigues jugando. ⚔️"
+    await continuarJugando()
+}
+
+// El jugador PERDIÓ: se elimina del servidor al pulsar "Reiniciar" o cerrar
+// la pestaña (no aquí), para que sus ataques sigan disponibles en el servidor
+// hasta que el ganador resuelva su combate.
+function perderCombate() {
+    sectionMensajes.innerHTML = "💀 Perdiste. Tu Mokepon ha sido eliminado. 💀"
+    sectionReiniciar.style.display = "block"
+}
+
+// Al pulsar "Ir a Siguiente Ronda": limpia los ataques del ganador en el servidor
+// para que el próximo rival no encuentre ataques viejos al hacer polling,
+// quita al enemigo del mapa local y vuelve a jugar.
+async function irASiguienteRonda() {
+    detenerHeartbeat()
+    botonSiguienteRonda.style.display = "none"
+    botonReiniciar.style.display = "inline-block"
+    // Resetea los ataques en el servidor ANTES de volver al mapa
+    await resetearAtaquesServidor().catch(function () {})
+    await continuarJugando()
+}
+
+let intervaloHeartbeat = null
+
+// Envía la última posición conocida al servidor cada 4s para evitar que el
+// timeout de inactividad elimine al ganador mientras está en la pantalla de resultados.
+function iniciarHeartbeat() {
+    detenerHeartbeat()
+    intervaloHeartbeat = setInterval(function () {
+        if (!jugadorId || !mascotaJugadorObjeto) return
+        enviarPosicion(mascotaJugadorObjeto.x, mascotaJugadorObjeto.y)
+    }, 4000)
+}
+
+function detenerHeartbeat() {
+    clearInterval(intervaloHeartbeat)
+    intervaloHeartbeat = null
+}
+
+// Vuelve al mapa tras ganar o empatar: limpia el estado del combate y reanuda
+// el juego. Si la red falla, igualmente reanuda el mapa para no bloquear al jugador.
+async function continuarJugando() {
+    // Limpia el estado local del combate
+    ataqueJugador = []
+    ataqueEnemigo = []
+    combateYaIniciado = false
+    combateEnCurso = false
+    reiniciarBotonesAtaque()
+
+    // Quita al enemigo derrotado de la lista local para no volver a colisionar
+    if (enemigoId) {
+        mokeponesEnemigos = mokeponesEnemigos.filter(function (m) { return m.id !== enemigoId })
+        ultimoEnemigoDerrotadoId = enemigoId
+    }
+
+    enemigoId = null
+    proximoCombatePermitidoEn = Date.now() + 1000
+
+    // Limpia el filtro del enemigo derrotado tras 5 s: si el perdedor recarga
+    // y vuelve con un nuevo ID, debe aparecer como enemigo válido en el mapa.
+    setTimeout(function () { ultimoEnemigoDerrotadoId = null }, 5000)
+
+    // Muestra el mapa y reanuda el juego
+    sectionSeleccionarAtaque.style.display = "none"
+    sectionVerMapa.style.display = "flex"
+    clearInterval(intervaloMapa)
+    intervaloMapa = setInterval(pintarCanvas, 50)
+}
+
+function reiniciarBotonesAtaque() {
+    if (!botones) return
+    botones.forEach(function (boton) {
+        boton.disabled = false
+        boton.style.background = ""
+    })
+}
+
+function resetearAtaquesServidor() {
+    if (!jugadorId) return Promise.resolve()
+    return fetch(`${BACKEND_URL}/mokepon/${jugadorId}/ataques`, {
+        method: "post",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ataques: [] })
+    })
 }
 
 function eliminarJugador(id) {
-    if (!id) return
-    fetch(`${BACKEND_URL}/mokepon/${id}`, { method: "delete" })
+    if (!id) return Promise.resolve()
+    return fetch(`${BACKEND_URL}/mokepon/${id}`, { method: "delete" })
 }
 
-function reiniciar() {
+let recargandoIntencionalmente = false  // evita que beforeunload duplique la eliminación al reiniciar
+
+async function reiniciar() {
+    recargandoIntencionalmente = true
+    // Espera a que el servidor elimine al jugador antes de recargar
+    await eliminarJugador(jugadorId).catch(function () {})
     location.reload()
 }
+
+// Si el jugador cierra la pestaña o navega fuera (sin pulsar Reiniciar),
+// se elimina del servidor. sendBeacon garantiza que la petición se envíe
+// incluso al cerrar. No se envía si la recarga la inició el botón Reiniciar.
+window.addEventListener("beforeunload", function () {
+    if (jugadorId && !recargandoIntencionalmente) {
+        navigator.sendBeacon(`${BACKEND_URL}/mokepon/${jugadorId}/salir`)
+    }
+})
 
 function aleatoria(min, max) {
     return Math.floor(Math.random() * (max - min + 1) + min)
@@ -439,7 +554,10 @@ function enviarPosicion(x, y) {
                 mokeponesEnemigos = enemigos
                     .filter(function (enemigo) {
                         // Ignorar jugadores que aún no eligieron Mokepon
-                        return enemigo.mokepon && enemigo.mokepon.nombre
+                        if (!enemigo.mokepon || !enemigo.mokepon.nombre) return false
+                        // Ignorar al enemigo derrotado hasta que él mismo salga del servidor
+                        if (enemigo.id === ultimoEnemigoDerrotadoId) return false
+                        return true
                     })
                     .map(function (enemigo) {
                     let mokeponEnemigo = null
@@ -567,16 +685,34 @@ function revisarColision(enemigo) {
         return
     }
 
+    // Ignorar al enemigo que acabamos de derrotar: puede seguir dibujándose un
+    // frame mientras el servidor procesa la baja, y no queremos volver a
+    // combatir con él.
+    if (enemigo.id === ultimoEnemigoDerrotadoId) return
+
+    // Enfriamiento tras terminar un combate: evita recolisar de inmediato con
+    // el rival (p. ej. tras un empate ambos quedan en el mismo punto).
+    if (Date.now() < proximoCombatePermitidoEn) return
+
     detenerMovimiento()
     clearInterval(intervaloMapa)
 
     if (combateEnCurso) return  // evita disparar el combate dos veces con la misma colisión
     combateEnCurso = true
 
-    // Limpiar ataques del combate anterior
+    // Limpiar el estado y el DOM del combate anterior para empezar uno nuevo
     ataqueJugador = []
     ataqueEnemigo = []
     combateYaIniciado = false
+    vidasJugador = 0
+    vidasEnemigos = 0
+    contadorCombates = 0
+    spanVidasJugador.innerHTML = "0"
+    spanVidasEnemigo.innerHTML = "0"
+    sectionMensajes.innerHTML = "Mucha Suerte"
+    ataquesDelJugador.innerHTML = ""
+    ataquesDelEnemigo.innerHTML = ""
+    sectionReiniciar.style.display = "none"
 
     enemigoId = enemigo.id
     sectionSeleccionarAtaque.style.display = "flex"

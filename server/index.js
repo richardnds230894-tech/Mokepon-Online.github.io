@@ -7,7 +7,7 @@ app.use(cors())
 app.use(express.json())
 
 const jugadores = []
-const TIMEOUT_INACTIVIDAD_MS = 10000  // eliminar jugador tras 10s sin enviar posición
+const TIMEOUT_INACTIVIDAD_MS = 60000  // eliminar jugador tras 60s sin enviar posición
 
 // Limpia jugadores inactivos cada 5 segundos.
 // Solo aplica a jugadores que ya entraron al mapa (ultimaActividad != null).
@@ -112,12 +112,27 @@ app.delete("/mokepon/:jugadorId", (req, res) => {
     const jugadorIndex = jugadores.findIndex((jugador) => jugadorId === jugador.id)
     if (jugadorIndex >= 0) {
         jugadores.splice(jugadorIndex, 1)
-        console.log(`Jugador ${jugadorId} eliminado tras combate`)
+        console.log(`Jugador ${jugadorId} eliminado`)
+    }
+    res.end()
+})
+
+// Recibe el beacon que envía el frontend al cerrar la pestaña o reiniciar.
+// sendBeacon usa POST, por eso es un endpoint separado del DELETE.
+app.post("/mokepon/:jugadorId/salir", (req, res) => {
+    const jugadorId = req.params.jugadorId || ""
+    const jugadorIndex = jugadores.findIndex((jugador) => jugadorId === jugador.id)
+    if (jugadorIndex >= 0) {
+        jugadores.splice(jugadorIndex, 1)
+        console.log(`Jugador ${jugadorId} salió (beacon)`)
     }
     res.end()
 })
 
 
+// Devuelve los ataques de un jugador. El frontend hace polling aquí para
+// obtener los ataques del enemigo hasta tener los 5.
+app.get("/mokepon/:jugadorId/ataques", (req, res) => {
     const jugadorId = req.params.jugadorId || ""
     const jugador = jugadores.find((jugador) => jugador.id === jugadorId)
     res.send({
