@@ -144,6 +144,9 @@ mokepones.forEach(mokepon => {
 
 botonMascotaJugador = document.getElementById("boton-seleccionar")
 botonMascotaJugador.addEventListener("click", seleccionarMascotaJugador)
+// Deshabilitar hasta recibir el ID del servidor (evita race condition con jugadorId null)
+botonMascotaJugador.disabled = true
+botonMascotaJugador.title = "Conectando al servidor..."
 
 
 sectionSeleccionarAtaque.style.display = "none"
@@ -162,6 +165,9 @@ function unirseAlJuego() {
                     .then(function (respuesta) {
                         console.log(respuesta)
                         jugadorId = respuesta
+                        // Habilitar el botón ahora que tenemos ID del servidor
+                        botonMascotaJugador.disabled = false
+                        botonMascotaJugador.title = ""
                     })
             } else {
                 // Reintenta si el servidor responde con error
@@ -419,11 +425,14 @@ function enviarPosicion(x, y) {
             .then(function ({ enemigos }) {
                         
 
-                mokeponesEnemigos = enemigos.map(function (enemigo) {
-                    console.log({enemigo})
-
+                mokeponesEnemigos = enemigos
+                    .filter(function (enemigo) {
+                        // Ignorar jugadores que aún no eligieron Mokepon
+                        return enemigo.mokepon && enemigo.mokepon.nombre
+                    })
+                    .map(function (enemigo) {
                     let mokeponEnemigo = null
-                    const mokeponNombre = enemigo.mokepon.nombre || ""
+                    const mokeponNombre = enemigo.mokepon.nombre
                     if (mokeponNombre === "Hipodoge") {
                         mokeponEnemigo = new Mokepon("Hipodoge", "./assets/mokepons_mokepon_hipodoge_attack.png", 5, "./assets/hipodoge.png", enemigo.id)
                     } else if (mokeponNombre === "Capipepo") {
@@ -432,11 +441,13 @@ function enviarPosicion(x, y) {
                         mokeponEnemigo = new Mokepon("Ratigueya", "./assets/mokepons_mokepon_ratigueya_attack.png", 5, "./assets/ratigueya.png", enemigo.id)
                     }
 
-                        mokeponEnemigo.x = enemigo.x  || 0
-                        mokeponEnemigo.y = enemigo.y  || 0
+                    if (!mokeponEnemigo) return null  // nombre desconocido, ignorar
 
-                        return mokeponEnemigo
-                })
+                    mokeponEnemigo.x = enemigo.x || 0
+                    mokeponEnemigo.y = enemigo.y || 0
+
+                    return mokeponEnemigo
+                }).filter(function(m) { return m !== null })
             })
        }
    })

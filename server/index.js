@@ -69,7 +69,8 @@ app.post("/mokepon/:jugadorId/posicion", (req, res) => {
         jugadores[jugadorIndex].actualizarPosicion(x, y)
     }
 
-    const enemigos = jugadores.filter((jugador) => jugadorId !== jugador.id)
+    // Solo devolver enemigos que ya eligieron Mokepon (evita crash en el frontend)
+    const enemigos = jugadores.filter((jugador) => jugadorId !== jugador.id && jugador.mokepon)
 
     res.send({ enemigos })
 })
