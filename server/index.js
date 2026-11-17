@@ -107,7 +107,17 @@ app.post("/mokepon/:jugadorId/ataques", (req, res) => {
     res.end()
 })
 
-app.get("/mokepon/:jugadorId/ataques", (req, res) => {
+app.delete("/mokepon/:jugadorId", (req, res) => {
+    const jugadorId = req.params.jugadorId || ""
+    const jugadorIndex = jugadores.findIndex((jugador) => jugadorId === jugador.id)
+    if (jugadorIndex >= 0) {
+        jugadores.splice(jugadorIndex, 1)
+        console.log(`Jugador ${jugadorId} eliminado tras combate`)
+    }
+    res.end()
+})
+
+
     const jugadorId = req.params.jugadorId || ""
     const jugador = jugadores.find((jugador) => jugador.id === jugadorId)
     res.send({

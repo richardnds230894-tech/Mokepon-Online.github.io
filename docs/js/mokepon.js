@@ -381,6 +381,14 @@ function crearMensajes() {
 function crearMensajeFinal(resultadoFinal) {
     sectionMensajes.innerHTML = (resultadoFinal)
     sectionReiniciar.style.display = "block"
+    // Eliminar ambos jugadores del servidor al terminar el combate
+    eliminarJugador(jugadorId)
+    eliminarJugador(enemigoId)
+}
+
+function eliminarJugador(id) {
+    if (!id) return
+    fetch(`${BACKEND_URL}/mokepon/${id}`, { method: "delete" })
 }
 
 function reiniciar() {
